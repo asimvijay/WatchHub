@@ -1,0 +1,48 @@
+name: watchhub
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_native_splash: ^2.4.5
+  animations: ^2.0.11
+  google_fonts: ^6.2.1
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/watch_logo.png
+    - assets/images/watch_logo1.png
+    - assets/images/watch1.png
+    - assets/images/watch2.png
+    - assets/images/watch3.png
+    - assets/images/watch4.png
+    - assets/images/watch5.png
+    - assets/images/watch6.png
+    - assets/images/watch7.png
+    - assets/images/watch8.png
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/watch_logo.png
+  android: true
+  ios: true
+  fullscreen: true
+  android_12:
+    image: assets/images/watch_logo.png
+    icon_background_color: "#ffffff"
