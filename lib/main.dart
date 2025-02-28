@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:watchhub/login.dart';
 import 'watch_data.dart'; // Import the watch data
 
-void main() {
+
+
+void main() async{
   runApp(const MyApp());
+  await Firebase.initializeApp();
 }
 
 class MyApp extends StatelessWidget {
@@ -84,7 +88,7 @@ class _LandingPageState extends State<LandingPage> {
                 const Icon(Icons.account_circle, size: 50, color: Colors.white),
                 const SizedBox(height: 10),
                 Text(
-                  "Hello, User!",
+                  "Hello, Guest!",
                   style: GoogleFonts.lato(
                     textStyle: const TextStyle(fontSize: 18, color: Colors.white),
                   ),
@@ -95,23 +99,36 @@ class _LandingPageState extends State<LandingPage> {
           ListTile(
             leading: const Icon(Icons.home, color: Colors.white),
             title: const Text("Home", style: TextStyle(color: Colors.white)),
-            onTap: () {},
+            onTap: () {
+              // Close the drawer
+              Navigator.pop(context);
+            },
           ),
           ListTile(
             leading: const Icon(Icons.settings, color: Colors.white),
             title: const Text("Settings", style: TextStyle(color: Colors.white)),
-            onTap: () {},
+            onTap: () {
+              // Close the drawer
+              Navigator.pop(context);
+            },
           ),
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.white),
-            title: const Text("Logout", style: TextStyle(color: Colors.white)),
-            onTap: () {},
+            leading: const Icon(Icons.login, color: Colors.white),
+            title: const Text("Sign In", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              // Close the drawer
+              Navigator.pop(context);
+              // Navigate to the LoginScreen
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
+            },
           ),
         ],
       ),
     );
   }
-
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -207,12 +224,12 @@ class _LandingPageState extends State<LandingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 10),
+                const SizedBox(height: 9),
                 Padding(
-                  padding: const EdgeInsets.only(top: 15),
+                  padding: const EdgeInsets.only(top: 12),
                   child: SizedBox(
                     width: 110,
-                    height: 110,
+                    height: 90,
                     child: Image.asset(image, fit: BoxFit.contain),
                   ),
                 ),
@@ -273,4 +290,5 @@ class _LandingPageState extends State<LandingPage> {
       ),
     );
   }
+
 }
