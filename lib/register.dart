@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:lottie/lottie.dart';
 import 'package:watchhub/login.dart';
 
@@ -12,6 +13,9 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref(); // Realtime Database Reference
+
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -20,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -27,11 +32,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
+    final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    if (username.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       _showMessage("All fields are required!");
       return;
     }
@@ -44,9 +50,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      _showMessage("Registration Successful!", success: true);
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+      // Create user in Firebase Authentication
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      User? user = userCredential.user;
+      if (user != null) {
+        // Save user data in Realtime Database
+        await _dbRef.child("users").child(user.uid).set({
+          "username": username,
+          "email": email,
+          "uid": user.uid,
+        });
+
+        _showMessage("Registration Successful!", success: true);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       _showMessage(e.message ?? "Registration failed!");
     } finally {
@@ -83,41 +107,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Lottie.asset('assets/animations/login_animate.json', width: 250, height: 250),
                 const SizedBox(height: 20),
 
+                // Username Input Field
                 TextField(
-                  controller: _emailController,
+                  controller: _usernameController,
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.person, color: Colors.grey),
-                    hintText: "Email",
+                    hintText: "Username",
+                    hintStyle: const TextStyle(color: Colors.grey),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
 
                 const SizedBox(height: 15),
 
+                // Email Input Field
+                TextField(
+                  controller: _emailController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.email, color: Colors.grey),
+                    hintText: "Email",
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                // Password Input Field
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                     hintText: "Password",
+                    hintStyle: const TextStyle(color: Colors.grey),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
 
                 const SizedBox(height: 15),
 
+                // Confirm Password Input Field
                 TextField(
                   controller: _confirmPasswordController,
                   obscureText: true,
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
                     hintText: "Confirm Password",
+                    hintStyle: const TextStyle(color: Colors.grey),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
+                // Register Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -135,6 +183,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 10),
 
+                // Login Redirect
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

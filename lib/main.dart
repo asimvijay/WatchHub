@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:watchhub/login.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:watchhub/firebase.dart';
 import 'watch_data.dart'; // Import the watch data
+import 'package:watchhub/login.dart';
 
-
-
-void main() async{
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.platformOptions);
   runApp(const MyApp());
-  await Firebase.initializeApp();
 }
 
 class MyApp extends StatelessWidget {
@@ -36,6 +38,47 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  User? _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCurrentUser();
+  }
+
+  void _checkCurrentUser() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    setState(() {
+      _user = user;
+    });
+  }
+
+  void _showWelcomePopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Welcome!"),
+          content: const Text("Enjoy 10% discount from today's date to the upcoming same date."),
+          actions: [
+            TextButton(
+              child: const Text("OK"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _logout() async {
+    await FirebaseAuth.instance.signOut();
+    setState(() {
+      _user = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +131,7 @@ class _LandingPageState extends State<LandingPage> {
                 const Icon(Icons.account_circle, size: 50, color: Colors.white),
                 const SizedBox(height: 10),
                 Text(
-                  "Hello, Guest!",
+                  _user != null ? "Hello, ${_user!.email}!" : "Hello, Guest!",
                   style: GoogleFonts.lato(
                     textStyle: const TextStyle(fontSize: 18, color: Colors.white),
                   ),
@@ -100,7 +143,6 @@ class _LandingPageState extends State<LandingPage> {
             leading: const Icon(Icons.home, color: Colors.white),
             title: const Text("Home", style: TextStyle(color: Colors.white)),
             onTap: () {
-              // Close the drawer
               Navigator.pop(context);
             },
           ),
@@ -108,27 +150,36 @@ class _LandingPageState extends State<LandingPage> {
             leading: const Icon(Icons.settings, color: Colors.white),
             title: const Text("Settings", style: TextStyle(color: Colors.white)),
             onTap: () {
-              // Close the drawer
               Navigator.pop(context);
             },
           ),
-          ListTile(
+          _user != null
+              ? ListTile(
+            leading: const Icon(Icons.logout, color: Colors.white),
+            title: const Text("Logout", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              _logout();
+              Navigator.pop(context);
+            },
+          )
+              : ListTile(
             leading: const Icon(Icons.login, color: Colors.white),
             title: const Text("Sign In", style: TextStyle(color: Colors.white)),
             onTap: () {
-              // Close the drawer
               Navigator.pop(context);
               // Navigate to the LoginScreen
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
               );
+
             },
           ),
         ],
       ),
     );
   }
+
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -290,5 +341,6 @@ class _LandingPageState extends State<LandingPage> {
       ),
     );
   }
-
 }
+
+
