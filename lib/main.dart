@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'watch_data.dart'; // Import the watch data
 
 void main() {
   runApp(const MyApp());
@@ -14,7 +15,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'WatchHub',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: const Color(0xFF1F2228),
         textTheme: GoogleFonts.latoTextTheme(Theme.of(context).textTheme),
       ),
       home: const LandingPage(),
@@ -22,28 +23,90 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class LandingPage extends StatelessWidget {
+class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
-  final List<Map<String, String>> watches = const [
-    {'image': 'assets/images/watch1.png', 'title': 'Leipzig Black', 'price': '\$334.99'},
-    {'image': 'assets/images/watch2.png', 'title': 'Macedon A11B', 'price': '\$1,010.00'},
-    {'image': 'assets/images/watch3.png', 'title': 'Meccanico Silver', 'price': '\$146.00'},
-    {'image': 'assets/images/watch4.png', 'title': 'Classic Automatic', 'price': '\$498.00'},
-    {'image': 'assets/images/watch5.png', 'title': 'Chopard Luxury', 'price': '\$799.00'},
-    {'image': 'assets/images/watch6.png', 'title': 'Fossil Gen 6', 'price': '\$249.00'},
-  ];
+  @override
+  _LandingPageState createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: _buildSidebar(),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1F2228),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.menu, color: Colors.white),
+          onPressed: () {
+            _scaffoldKey.currentState?.openDrawer();
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications, color: Colors.white),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle, color: Colors.white),
+            onPressed: () {},
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          const SizedBox(height: 50),
+          const SizedBox(height: 20),
           _buildSearchBar(),
           const SizedBox(height: 20),
           _buildHeader(),
           Expanded(child: _buildWatchGrid()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebar() {
+    return Drawer(
+      backgroundColor: const Color(0xFF2D333A),
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF1F2228)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.account_circle, size: 50, color: Colors.white),
+                const SizedBox(height: 10),
+                Text(
+                  "Hello, User!",
+                  style: GoogleFonts.lato(
+                    textStyle: const TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.home, color: Colors.white),
+            title: const Text("Home", style: TextStyle(color: Colors.white)),
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings, color: Colors.white),
+            title: const Text("Settings", style: TextStyle(color: Colors.white)),
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.white),
+            title: const Text("Logout", style: TextStyle(color: Colors.white)),
+            onTap: () {},
+          ),
         ],
       ),
     );
@@ -59,7 +122,7 @@ class LandingPage extends StatelessWidget {
           hintStyle: const TextStyle(color: Colors.grey),
           prefixIcon: const Icon(Icons.search, color: Colors.white),
           filled: true,
-          fillColor: Colors.grey[900],
+          fillColor: const Color(0xFF2D333A),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide.none,
@@ -109,7 +172,7 @@ class LandingPage extends StatelessWidget {
         padding: const EdgeInsets.only(top: 10),
         itemCount: watches.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2, // 2 watches per row
+          crossAxisCount: 2,
           crossAxisSpacing: 15,
           mainAxisSpacing: 15,
           childAspectRatio: 0.7,
@@ -117,7 +180,9 @@ class LandingPage extends StatelessWidget {
         itemBuilder: (context, index) {
           return _buildWatchCard(
             watches[index]['image']!,
+            watches[index]['brand']!,
             watches[index]['title']!,
+            watches[index]['details']!,
             watches[index]['price']!,
           );
         },
@@ -125,39 +190,83 @@ class LandingPage extends StatelessWidget {
     );
   }
 
-  Widget _buildWatchCard(String image, String title, String price) {
+  Widget _buildWatchCard(String image, String brand, String title, String details, String price) {
     return Container(
+      width: 180,
       decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFF2D333A),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10),
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Stack(
         children: [
-          const SizedBox(height: 10),
-          Image.asset(image, width: 100, height: 100),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.lato(
-              textStyle: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 15),
+                  child: SizedBox(
+                    width: 110,
+                    height: 110,
+                    child: Image.asset(image, fit: BoxFit.contain),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.lato(
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  details,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      price,
+                      style: const TextStyle(fontSize: 16, color: Color(0xFFFECFB1), fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.shopping_cart, color: Colors.white, size: 20),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 5),
-          Text(
-            price,
-            style: const TextStyle(fontSize: 14, color: Colors.orangeAccent, fontWeight: FontWeight.bold),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: IconButton(
-              icon: const Icon(Icons.favorite_border, color: Colors.white),
-              onPressed: () {},
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF959BA2), width: 1.5),
+              ),
+              child: Text(
+                brand,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF959BA2),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],

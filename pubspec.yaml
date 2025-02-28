@@ -29,13 +29,9 @@ flutter:
     - assets/images/watch_logo.png
     - assets/images/watch_logo1.png
     - assets/images/watch1.png
-    - assets/images/watch2.png
-    - assets/images/watch3.png
-    - assets/images/watch4.png
-    - assets/images/watch5.png
-    - assets/images/watch6.png
-    - assets/images/watch7.png
-    - assets/images/watch8.png
+    - assets/images/watch2.webp
+    - assets/images/
+
 
 flutter_native_splash:
   color: "#ffffff"
