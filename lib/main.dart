@@ -8,7 +8,7 @@ import 'package:watchhub/watch_detail.dart';
 import 'watch_data.dart'; // Import the watch data
 import 'package:watchhub/login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'purchase.dart'; // Import the new file
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.platformOptions);
@@ -53,10 +53,62 @@ class _LandingPageState extends State<LandingPage> {
     super.initState();
     _checkCurrentUser();
   }
+  void _handlePurchase(BuildContext context, List<Map<String, dynamic>> cartItems, double totalPrice) async {
+    final purchaseHandler = PurchaseHandler(
+      context,
+      _scaffoldKey,
+      cartItems: cartItems,
+      totalPrice: totalPrice,
+    );
+    purchaseHandler.handlePurchase();
+  }
   void dispose() {
     _searchFocusNode.dispose(); // Dispose the FocusNode
     super.dispose();
   }
+
+  Future<String?> _showAddAddressDialog(BuildContext context) async {
+    final TextEditingController _addressController = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Add Address", style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: _addressController,
+            decoration: const InputDecoration(
+              labelText: "Enter your address",
+              labelStyle: TextStyle(color: Colors.white),
+            ),
+            style: const TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Cancel
+              },
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                if (_addressController.text.isNotEmpty) {
+                  Navigator.pop(context, _addressController.text); // Return new address
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please enter an address")),
+                  );
+                }
+              },
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
   Future<Map<String, dynamic>> _fetchUserData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -72,6 +124,230 @@ class _LandingPageState extends State<LandingPage> {
     }
     return {};
   }
+  void _showCart(BuildContext context) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference cartRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .child('cart');
+
+      DataSnapshot snapshot = await cartRef.get();
+      if (snapshot.exists) {
+        List<Map<String, dynamic>> cartItems = [];
+        double totalPrice = 0;
+
+        snapshot.children.forEach((element) {
+          final item = Map<String, dynamic>.from(element.value as Map);
+          item['key'] = element.key; // Add the Firebase key for removal
+
+          // Clean the price string and parse it into a double
+          String cleanedPrice = item['price'].replaceAll(RegExp(r'[^0-9.]'), '');
+          item['price'] = double.parse(cleanedPrice);
+
+          cartItems.add(item);
+          totalPrice += (item['price'] * item['quantity']);
+        });
+
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF2D333A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text(
+                    "Your Cart",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: cartItems.length,
+                            itemBuilder: (context, index) {
+                              final item = cartItems[index];
+                              return Card(
+                                color: const Color(0xFF1F2228),
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Row(
+                                    children: [
+                                      // Left Column: Image
+                                      Image.asset(
+                                        item['image'],
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.contain,
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Right Column: Title, Price & Quantity
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // 1st Row: Title
+                                            Text(
+                                              item['title'],
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+
+                                            // 2nd Row: Price & Quantity Buttons
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(
+                                                  "\$${item['price'].toStringAsFixed(2)}",
+                                                  style: const TextStyle(
+                                                    color: Colors.grey,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    IconButton(
+                                                      icon: const Icon(Icons.remove, color: Colors.white),
+                                                      onPressed: () async {
+                                                        if (item['quantity'] > 1) {
+                                                          await cartRef.child(item['key']!).update({
+                                                            'quantity': item['quantity'] - 1,
+                                                          });
+                                                          setState(() {
+                                                            item['quantity']--;
+                                                            totalPrice -= item['price'];
+                                                          });
+                                                        } else {
+                                                          await cartRef.child(item['key']!).remove();
+                                                          setState(() {
+                                                            cartItems.removeAt(index);
+                                                            totalPrice -= item['price'];
+                                                          });
+                                                        }
+                                                      },
+                                                    ),
+                                                    Text(
+                                                      "${item['quantity']}",
+                                                      style: const TextStyle(color: Colors.white),
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.add, color: Colors.white),
+                                                      onPressed: () async {
+                                                        await cartRef.child(item['key']!).update({
+                                                          'quantity': item['quantity'] + 1,
+                                                        });
+                                                        setState(() {
+                                                          item['quantity']++;
+                                                          totalPrice += item['price'];
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          "Total: \$${totalPrice.toStringAsFixed(2)}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1F2228),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: () => _handlePurchase(context, cartItems, totalPrice), // Call the purchase flow
+                          child: const Text(
+                            "Purchase",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1F2228),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            // Navigate to the LoginScreen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LandingPage()),
+                            );
+                          }, // Call the purchase flow
+
+                          child: const Text(
+                            "Continue Shopping",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Your cart is empty")),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You must be logged in to view your cart")),
+      );
+    }
+  }
+
   void _showUserProfileModal(BuildContext context) async {
     final TextEditingController _nameController = TextEditingController(text: _username);
     final Map<String, dynamic> userData = await _fetchUserData();
@@ -125,7 +401,7 @@ class _LandingPageState extends State<LandingPage> {
                     ElevatedButton(
                       onPressed: () {
                         // Add functionality to add phone number
-                        _showAddPhoneNumberDialog(context);
+                        _showAddPhoneNumberDialogs(context);
                       },
                       child: const Text("Add Phone Number"),
                     ),
@@ -163,7 +439,7 @@ class _LandingPageState extends State<LandingPage> {
                   if ((userData['addresses'] == null || userData['addresses'].isEmpty) && isEditing)
                     ElevatedButton(
                       onPressed: () {
-                        _showAddAddressDialog(context);
+                        _showAddAddressDialogs(context);
                       },
                       child: const Text("Add Address"),
                     ),
@@ -199,7 +475,7 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  void _showAddPhoneNumberDialog(BuildContext context) {
+  void _showAddPhoneNumberDialogs(BuildContext context) {
     final TextEditingController _phoneController = TextEditingController();
 
     showDialog(
@@ -273,7 +549,7 @@ class _LandingPageState extends State<LandingPage> {
     }
   }
 
-  void _showAddAddressDialog(BuildContext context) async {
+  void _showAddAddressDialogs(BuildContext context) async {
     final TextEditingController _addressController = TextEditingController();
     int addressCount = await _getAddressCount();
 
@@ -506,7 +782,7 @@ class _LandingPageState extends State<LandingPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.shopping_cart, color: Colors.white),
-            onPressed: () {},
+            onPressed: () => _showCart(context), // Open the cart
           ),
           IconButton(
             icon: const Icon(Icons.notifications, color: Colors.white),
@@ -735,7 +1011,7 @@ class _LandingPageState extends State<LandingPage> {
                     Text(
                       watch['price']!,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         color: Color(0xFFFECFB1),
                         fontWeight: FontWeight.bold,
                       ),
@@ -746,10 +1022,14 @@ class _LandingPageState extends State<LandingPage> {
                           color: Colors.white,
                           size: 20),
                       onPressed: () {
+                        // In the _buildWatchCard method or wherever you navigate to WatchDetailPage
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => WatchDetailPage(watch: watch),
+                            builder: (context) => WatchDetailPage(
+                              watch: watch,
+                              onAddToCart: () => _showCart(context), // Pass the callback
+                            ),
                           ),
                         );
                       },
@@ -808,3 +1088,4 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 }
+
