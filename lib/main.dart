@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:watchhub/firebase.dart';
+import 'package:watchhub/watch_detail.dart';
 import 'watch_data.dart'; // Import the watch data
 import 'package:watchhub/login.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,33 +42,197 @@ class LandingPage extends StatefulWidget {
 class _LandingPageState extends State<LandingPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   User? _user;
+  String _username = 'Guest';
+  String _sortBy = 'default'; // Sorting criteria
+  final TextEditingController _searchController = TextEditingController(); // Search controller
+  String _searchQuery = ''; // Search query
+  final FocusNode _searchFocusNode = FocusNode(); // Add this line
 
   @override
   void initState() {
     super.initState();
     _checkCurrentUser();
   }
-
-  void _checkCurrentUser() async {
+  void dispose() {
+    _searchFocusNode.dispose(); // Dispose the FocusNode
+    super.dispose();
+  }
+  Future<Map<String, dynamic>> _fetchUserData() async {
     User? user = FirebaseAuth.instance.currentUser;
-    setState(() {
-      _user = user;
-    });
+    if (user != null) {
+      DatabaseReference userRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid);
+
+      DataSnapshot snapshot = await userRef.get();
+      if (snapshot.exists) {
+        return Map<String, dynamic>.from(snapshot.value as Map);
+      }
+    }
+    return {};
+  }
+  void _showUserProfileModal(BuildContext context) async {
+    final TextEditingController _nameController = TextEditingController(text: _username);
+    final Map<String, dynamic> userData = await _fetchUserData();
+    bool isEditing = false; // Track whether the user is editing the profile
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF2D333A),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "User Profile",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Display Username (editable only when isEditing is true)
+                  TextField(
+                    controller: _nameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      labelText: "Name",
+                      labelStyle: TextStyle(color: Colors.white),
+                      border: OutlineInputBorder(),
+                    ),
+                    enabled: isEditing, // Enable editing only when isEditing is true
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Display Phone Number (if exists)
+                  if (userData['phone'] != null)
+                    ListTile(
+                      leading: const Icon(Icons.phone, color: Colors.white),
+                      title: Text(
+                        "Phone: ${userData['phone']}",
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  if (userData['phone'] == null && isEditing)
+                    ElevatedButton(
+                      onPressed: () {
+                        // Add functionality to add phone number
+                        _showAddPhoneNumberDialog(context);
+                      },
+                      child: const Text("Add Phone Number"),
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // Display Addresses (if exists)
+                  if (userData['addresses'] != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Addresses:",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        ...(userData['addresses'] as Map).entries.map((entry) {
+                          return ListTile(
+                            leading: const Icon(Icons.location_on, color: Colors.white),
+                            title: Text(
+                              entry.value['address'],
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              "Added on: ${DateTime.fromMillisecondsSinceEpoch(entry.value['timestamp']).toString()}",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  if ((userData['addresses'] == null || userData['addresses'].isEmpty) && isEditing)
+                    ElevatedButton(
+                      onPressed: () {
+                        _showAddAddressDialog(context);
+                      },
+                      child: const Text("Add Address"),
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // Edit Profile or Save Changes Button
+                  if (!isEditing)
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          isEditing = true; // Enable editing mode
+                        });
+                      },
+                      child: const Text("Edit Profile"),
+                    ),
+                  if (isEditing)
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (_nameController.text.isNotEmpty) {
+                          await _updateUserName(_nameController.text);
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text("Save Changes"),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
-  void _showWelcomePopup(BuildContext context) {
+  void _showAddPhoneNumberDialog(BuildContext context) {
+    final TextEditingController _phoneController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Welcome!"),
-          content: const Text("Enjoy 10% discount from today's date to the upcoming same date."),
+          title: const Text("Add Phone Number", style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: _phoneController,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: "Enter your phone number",
+            ),
+          ),
           actions: [
             TextButton(
-              child: const Text("OK"),
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.pop(context); // Close the dialog
               },
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (_phoneController.text.isNotEmpty) {
+                  await _updatePhoneNumber(_phoneController.text);
+                  Navigator.pop(context); // Close the dialog
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please enter a phone number")),
+                  );
+                }
+              },
+              child: const Text("Save"),
             ),
           ],
         );
@@ -73,10 +240,252 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
+  Future<void> _updatePhoneNumber(String phone) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference userRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid);
+
+      await userRef.update({'phone': phone});
+      ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+        const SnackBar(content: Text("Phone number updated successfully")),
+      );
+    }
+  }
+  Future<void> _updateUserName(String newName) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference userRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid);
+
+      await userRef.update({'username': newName});
+      setState(() {
+        _username = newName;
+      });
+
+      ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+        const SnackBar(content: Text("Username updated successfully")),
+      );
+    }
+  }
+
+  void _showAddAddressDialog(BuildContext context) async {
+    final TextEditingController _addressController = TextEditingController();
+    int addressCount = await _getAddressCount();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Add Delivery Address ($addressCount/3)", style: const TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: _addressController,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: "Enter your delivery address",
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close the dialog
+              },
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (_addressController.text.isNotEmpty) {
+                  if (addressCount < 3) {
+                    await _saveAddressToFirebase(_addressController.text);
+                    Navigator.pop(context); // Close the dialog
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("You can only save up to 3 addresses")),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please enter an address")),
+                  );
+                }
+              },
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _saveAddressToFirebase(String address) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference userRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .child('addresses');
+
+      // Fetch the current number of addresses
+      DataSnapshot snapshot = await userRef.get();
+      if (snapshot.exists && snapshot.children.length >= 3) {
+        ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+          const SnackBar(content: Text("You can only save up to 3 addresses")),
+        );
+        return;
+      }
+
+      // Push a new address to the database
+      await userRef.push().set({
+        'address': address,
+        'timestamp': ServerValue.timestamp,
+      });
+
+      ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+        const SnackBar(content: Text("Address saved successfully")),
+      );
+    } else {
+      ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+        const SnackBar(content: Text("You must be logged in to save an address")),
+      );
+    }
+  }
+
+  Future<int> _getAddressCount() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference userRef = FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .child('addresses');
+
+      DataSnapshot snapshot = await userRef.get();
+      return snapshot.exists ? snapshot.children.length : 0;
+    }
+    return 0;
+  }
+  void _checkCurrentUser() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    if (user != null) {
+      // Check if username is already saved in local storage
+      String? savedUsername = prefs.getString('username');
+      if (savedUsername != null) {
+        setState(() {
+          _user = user;
+          _username = savedUsername;
+        });
+      } else {
+        // Fetch username from Firebase if not saved locally
+        DatabaseReference userRef = FirebaseDatabase.instance.ref().child('users').child(user.uid);
+        DataSnapshot snapshot = await userRef.get();
+        if (snapshot.exists) {
+          String username = snapshot.child('username').value.toString();
+          // Save username to local storage
+          await prefs.setString('username', username);
+          setState(() {
+            _user = user;
+            _username = username;
+          });
+        } else {
+          // If no username in Firebase, use email or 'Guest'
+          String username = user.email ?? 'Guest';
+          await prefs.setString('username', username);
+          setState(() {
+            _user = user;
+            _username = username;
+          });
+        }
+      }
+    } else {
+      // If no user is logged in, clear the saved username
+      await prefs.remove('username');
+      setState(() {
+        _user = null;
+        _username = 'Guest';
+      });
+    }
+  }
+
+  // Sorting function (now moved to WatchData)
+  List<Map<String, String>> _sortWatches(List<Map<String, String>> watches) {
+    return WatchData.sortWatches(watches, _sortBy);
+  }
+
+  // Filter watches based on search query (now moved to WatchData)
+  List<Map<String, String>> _filterWatches(List<Map<String, String>> watches) {
+    return WatchData.filterWatches(watches, _searchQuery);
+  }
+
+  void _showSortOptions(BuildContext context) {
+    FocusScope.of(context).unfocus(); // Unfocus the TextField
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          backgroundColor: Colors.black87.withOpacity(0.9),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Sort By",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Divider(color: Colors.grey),
+                _buildSortOption(context, "Price: Low to High", Icons.arrow_upward, 'priceLowToHigh'),
+                _buildSortOption(context, "Price: High to Low", Icons.arrow_downward, 'priceHighToLow'),
+                _buildSortOption(context, "Name: A to Z", Icons.sort_by_alpha, 'nameAtoZ'),
+                _buildSortOption(context, "Name: Z to A", Icons.sort_by_alpha_outlined, 'nameZtoA'),
+                _buildSortOption(context, "Brand: A to Z", Icons.storefront, 'brandAtoZ'),
+                _buildSortOption(context, "Brand: Z to A", Icons.store, 'brandZtoA'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSortOption(BuildContext context, String title, IconData icon, String value) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(title, style: TextStyle(color: Colors.white)),
+      onTap: () {
+        setState(() {
+          _sortBy = value; // Update sorting criteria
+        });
+        Navigator.pop(context);
+      },
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      hoverColor: Colors.grey.withOpacity(0.2),
+    );
+  }
+
   void _logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('username');
     await FirebaseAuth.instance.signOut();
     setState(() {
       _user = null;
+      _username = 'Guest';
     });
   }
 
@@ -85,7 +494,7 @@ class _LandingPageState extends State<LandingPage> {
     return Scaffold(
       key: _scaffoldKey,
       drawer: _buildSidebar(),
-      appBar: AppBar(
+      appBar:AppBar(
         backgroundColor: const Color(0xFF1F2228),
         elevation: 0,
         leading: IconButton(
@@ -96,12 +505,25 @@ class _LandingPageState extends State<LandingPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.shopping_cart, color: Colors.white),
+            onPressed: () {},
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications, color: Colors.white),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.account_circle, color: Colors.white),
-            onPressed: () {},
+            icon: _user != null
+                ? CircleAvatar(
+              radius: 15,
+              backgroundImage: AssetImage('assets/images/user.jpg'),
+            )
+                : const Icon(Icons.account_circle, color: Colors.white),
+            onPressed: () {
+              if (_user != null) {
+                _showUserProfileModal(context);
+              }
+            },
           ),
         ],
       ),
@@ -128,10 +550,16 @@ class _LandingPageState extends State<LandingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.account_circle, size: 50, color: Colors.white),
+                // Display user image if logged in, otherwise use default icon
+                _user != null
+                    ? CircleAvatar(
+                  radius: 30,
+                  backgroundImage: AssetImage('assets/images/user.jpg'),
+                )
+                    : const Icon(Icons.account_circle, size: 50, color: Colors.white),
                 const SizedBox(height: 10),
                 Text(
-                  _user != null ? "Hello, ${_user!.email}!" : "Hello, Guest!",
+                  _user != null ? "Hello, $_username!" : "Hello, Guest!",
                   style: GoogleFonts.lato(
                     textStyle: const TextStyle(fontSize: 18, color: Colors.white),
                   ),
@@ -144,6 +572,14 @@ class _LandingPageState extends State<LandingPage> {
             title: const Text("Home", style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.location_on, color: Colors.white),
+            title: const Text("Add Delivery Addresses", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context); // Close the drawer
+              _showAddAddressDialog(context); // Open the address pop-up
             },
           ),
           ListTile(
@@ -172,21 +608,21 @@ class _LandingPageState extends State<LandingPage> {
                 context,
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
               );
-
             },
           ),
         ],
       ),
     );
   }
-
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode, // Assign the FocusNode
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
-          hintText: 'Search Here',
+          hintText: 'Search Brand Names Here',
           hintStyle: const TextStyle(color: Colors.grey),
           prefixIcon: const Icon(Icons.search, color: Colors.white),
           filled: true,
@@ -196,6 +632,11 @@ class _LandingPageState extends State<LandingPage> {
             borderSide: BorderSide.none,
           ),
         ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value; // Update search query
+          });
+        },
       ),
     );
   }
@@ -224,7 +665,9 @@ class _LandingPageState extends State<LandingPage> {
               ),
               IconButton(
                 icon: const Icon(Icons.filter_list, color: Colors.white),
-                onPressed: () {},
+                onPressed: () {
+                  _showSortOptions(context); // Show sorting options
+                },
               ),
             ],
           ),
@@ -233,34 +676,11 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  Widget _buildWatchGrid() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GridView.builder(
-        padding: const EdgeInsets.only(top: 10),
-        itemCount: watches.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 15,
-          mainAxisSpacing: 15,
-          childAspectRatio: 0.7,
-        ),
-        itemBuilder: (context, index) {
-          return _buildWatchCard(
-            watches[index]['image']!,
-            watches[index]['brand']!,
-            watches[index]['title']!,
-            watches[index]['details']!,
-            watches[index]['price']!,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildWatchCard(String image, String brand, String title, String details, String price) {
+// Modify _buildWatchCard in _LandingPageState
+  Widget _buildWatchCard(Map<String, String> watch) {
     return Container(
       width: 180,
+
       decoration: BoxDecoration(
         color: const Color(0xFF2D333A),
         borderRadius: BorderRadius.circular(12),
@@ -269,24 +689,27 @@ class _LandingPageState extends State<LandingPage> {
         ],
       ),
       child: Stack(
+
         children: [
           Padding(
+
             padding: const EdgeInsets.all(12.0),
             child: Column(
+
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 9),
                 Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.only(top: 13),
                   child: SizedBox(
-                    width: 110,
-                    height: 90,
-                    child: Image.asset(image, fit: BoxFit.contain),
+
+                    height: 80,
+                    child: Image.asset(watch['image']!, fit: BoxFit.contain),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 5),
                 Text(
-                  title,
+                  watch['title']!,
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -298,21 +721,39 @@ class _LandingPageState extends State<LandingPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 1),
                 Text(
-                  details,
+                  watch['details']!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
-                const SizedBox(height: 8),
+
                 Row(
                   children: [
                     Text(
-                      price,
-                      style: const TextStyle(fontSize: 16, color: Color(0xFFFECFB1), fontWeight: FontWeight.bold),
+                      watch['price']!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFFFECFB1),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Spacer(),
-                    const Icon(Icons.shopping_cart, color: Colors.white, size: 20),
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart_checkout,
+                          color: Colors.white,
+                          size: 20),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WatchDetailPage(watch: watch),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ],
@@ -328,7 +769,7 @@ class _LandingPageState extends State<LandingPage> {
                 border: Border.all(color: const Color(0xFF959BA2), width: 1.5),
               ),
               child: Text(
-                brand,
+                watch['brand']!,
                 style: const TextStyle(
                   fontSize: 10,
                   color: Color(0xFF959BA2),
@@ -341,6 +782,29 @@ class _LandingPageState extends State<LandingPage> {
       ),
     );
   }
+
+// Update _buildWatchGrid in _LandingPageState
+  Widget _buildWatchGrid() {
+    List<Map<String, String>> filteredWatches =
+    WatchData.filterWatches(WatchData.watches, _searchQuery);
+    List<Map<String, String>> sortedWatches =
+    WatchData.sortWatches(filteredWatches, _sortBy);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GridView.builder(
+        padding: const EdgeInsets.only(top: 10),
+        itemCount: sortedWatches.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          childAspectRatio: 0.7,
+        ),
+        itemBuilder: (context, index) {
+          return _buildWatchCard(sortedWatches[index]);
+        },
+      ),
+    );
+  }
 }
-
-
