@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:watchhub/main.dart';
+import 'package:watchhub/main.dart'; // Main screen for users
+import 'package:watchhub/admin_screen.dart'; // Admin screen for admins
 import 'package:watchhub/register.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +23,13 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<String?> _getUserRole(String uid) async {
+    // Fetch the user's role from Firebase Realtime Database
+    DatabaseReference userRef = FirebaseDatabase.instance.ref().child("users").child(uid);
+    DataSnapshot snapshot = await userRef.child("role").get();
+    return snapshot.value as String?;
   }
 
   void _login() async {
@@ -48,10 +57,21 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (userCredential.user != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => LandingPage()),
-        );
+        // Fetch the user's role
+        String? role = await _getUserRole(userCredential.user!.uid);
+
+        // Navigate based on the role
+        if (role == "admin") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LandingPage()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       String errorMessage = "An error occurred";
@@ -182,4 +202,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }}
+  }
+}

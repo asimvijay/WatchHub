@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:watchhub/firebase.dart';
 import 'package:watchhub/watch_detail.dart';
+import 'package:watchhub/wishlist.dart';
 import 'watch_data.dart'; // Import the watch data
 import 'package:watchhub/login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,7 +48,7 @@ class _LandingPageState extends State<LandingPage> {
   final TextEditingController _searchController = TextEditingController(); // Search controller
   String _searchQuery = ''; // Search query
   final FocusNode _searchFocusNode = FocusNode(); // Add this line
-
+  List<String> _wishlistItems = [];
   @override
   void initState() {
     super.initState();
@@ -116,13 +117,68 @@ class _LandingPageState extends State<LandingPage> {
           .ref()
           .child('users')
           .child(user.uid);
-
+          await _fetchWishlist();
       DataSnapshot snapshot = await userRef.get();
       if (snapshot.exists) {
         return Map<String, dynamic>.from(snapshot.value as Map);
       }
     }
     return {};
+  }
+
+  Future<void> _fetchWishlist() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      DatabaseReference wishlistRef = FirebaseDatabase.instance.ref()
+          .child('users')
+          .child(user.uid)
+          .child('wishlist');
+
+      DataSnapshot snapshot = await wishlistRef.get();
+      if (snapshot.exists) {
+        Map<dynamic, dynamic> values = snapshot.value as Map;
+        setState(() {
+          _wishlistItems = values.keys.cast<String>().toList();
+        });
+      } else {
+        setState(() {
+          _wishlistItems = [];
+        });
+      }
+    }
+  }
+  void _toggleWishlist(Map<String, String> watch) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to add to wishlist")),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    DatabaseReference wishlistRef = FirebaseDatabase.instance.ref()
+        .child('users')
+        .child(user.uid)
+        .child('wishlist')
+        .child(watch['title']!);
+
+    bool isInWishlist = _wishlistItems.contains(watch['title']!);
+
+    if (isInWishlist) {
+      await wishlistRef.remove();
+      setState(() {
+        _wishlistItems.remove(watch['title']!);
+      });
+    } else {
+      await wishlistRef.set(watch);
+      setState(() {
+        _wishlistItems.add(watch['title']!);
+      });
+    }
   }
   void _showCart(BuildContext context) async {
     User? user = FirebaseAuth.instance.currentUser;
@@ -679,16 +735,18 @@ class _LandingPageState extends State<LandingPage> {
           });
         }
       }
+      // Fetch wishlist data after user is logged in
+      await _fetchWishlist();
     } else {
       // If no user is logged in, clear the saved username
       await prefs.remove('username');
       setState(() {
         _user = null;
         _username = 'Guest';
+        _wishlistItems = [];
       });
     }
   }
-
   // Sorting function (now moved to WatchData)
   List<Map<String, String>> _sortWatches(List<Map<String, String>> watches) {
     return WatchData.sortWatches(watches, _sortBy);
@@ -762,6 +820,7 @@ class _LandingPageState extends State<LandingPage> {
     setState(() {
       _user = null;
       _username = 'Guest';
+      _wishlistItems = [];
     });
   }
 
@@ -865,6 +924,27 @@ class _LandingPageState extends State<LandingPage> {
               Navigator.pop(context);
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.favorite, color: Colors.white),
+            title: const Text("Wishlist", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              if (_user == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please login to view your wishlist")),
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WishlistScreen()),
+                );
+              }
+            },
+          ),
           _user != null
               ? ListTile(
             leading: const Icon(Icons.logout, color: Colors.white),
@@ -956,7 +1036,6 @@ class _LandingPageState extends State<LandingPage> {
   Widget _buildWatchCard(Map<String, String> watch) {
     return Container(
       width: 180,
-
       decoration: BoxDecoration(
         color: const Color(0xFF2D333A),
         borderRadius: BorderRadius.circular(12),
@@ -965,20 +1044,16 @@ class _LandingPageState extends State<LandingPage> {
         ],
       ),
       child: Stack(
-
         children: [
           Padding(
-
             padding: const EdgeInsets.all(12.0),
             child: Column(
-
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 9),
                 Padding(
                   padding: const EdgeInsets.only(top: 13),
                   child: SizedBox(
-
                     height: 80,
                     child: Image.asset(watch['image']!, fit: BoxFit.contain),
                   ),
@@ -1005,7 +1080,6 @@ class _LandingPageState extends State<LandingPage> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
-
                 Row(
                   children: [
                     Text(
@@ -1022,13 +1096,12 @@ class _LandingPageState extends State<LandingPage> {
                           color: Colors.white,
                           size: 20),
                       onPressed: () {
-                        // In the _buildWatchCard method or wherever you navigate to WatchDetailPage
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => WatchDetailPage(
                               watch: watch,
-                              onAddToCart: () => _showCart(context), // Pass the callback
+                              onAddToCart: () => _showCart(context),
                             ),
                           ),
                         );
@@ -1056,6 +1129,21 @@ class _LandingPageState extends State<LandingPage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton(
+              icon: Icon(
+                _wishlistItems.contains(watch['title']!)
+                    ? Icons.favorite
+                    : Icons.favorite_border,
+                color: _wishlistItems.contains(watch['title']!)
+                    ? Colors.red
+                    : Colors.white,
+              ),
+              onPressed: () => _toggleWishlist(watch),
             ),
           ),
         ],

@@ -58,11 +58,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       User? user = userCredential.user;
       if (user != null) {
-        // Save user data in Realtime Database
+        // Save user data in Realtime Database with role: "user"
         await _dbRef.child("users").child(user.uid).set({
           "username": username,
           "email": email,
           "uid": user.uid,
+          "role": "user", // Add the role field here
         });
 
         _showMessage("Registration Successful!", success: true);
