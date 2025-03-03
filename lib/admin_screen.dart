@@ -12,40 +12,43 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
-  List<Map<String, dynamic>> _users = [];
-  bool _isLoading = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchUsers();
-  }
-
-  Future<void> _fetchUsers() async {
+  Future<List<Map<String, dynamic>>> _fetchUsers() async {
     try {
       DataSnapshot snapshot = await _dbRef.child("users").get();
       if (snapshot.exists) {
         Map<dynamic, dynamic> usersMap = snapshot.value as Map;
         List<Map<String, dynamic>> users = [];
-        usersMap.forEach((key, value) {
-          users.add(Map<String, dynamic>.from(value));
-        });
-        setState(() {
-          _users = users;
-          _isLoading = false;
-        });
+
+        // Loop through each user
+        for (var entry in usersMap.entries) {
+          String uid = entry.key;
+          Map<String, dynamic> user = Map<String, dynamic>.from(entry.value);
+
+          // Fetch addresses for the user
+          DataSnapshot addressSnapshot = await _dbRef.child("users/$uid/addresses").get();
+          if (addressSnapshot.exists) {
+            Map<dynamic, dynamic> addressesMap = addressSnapshot.value as Map;
+            List<Map<String, dynamic>> addresses = [];
+
+            // Loop through each address
+            addressesMap.forEach((key, addressData) {
+              addresses.add(Map<String, dynamic>.from(addressData));
+            });
+
+            // Add addresses to the user data
+            user["addresses"] = addresses;
+          }
+
+          users.add(user);
+        }
+
+        return users;
       } else {
-        setState(() {
-          _isLoading = false;
-        });
+        return [];
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to fetch users: $e")),
-      );
+      throw Exception("Failed to fetch users: $e");
     }
   }
 
@@ -70,48 +73,119 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "User Management",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _users.length,
-                itemBuilder: (context, index) {
-                  final user = _users[index];
-                  return Card(
-                    color: const Color(0xFF2D333A),
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      leading: const Icon(Icons.person, color: Colors.white),
-                      title: Text(
-                        user["username"] ?? "No Name",
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        user["email"] ?? "No Email",
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      trailing: Text(
-                        "Role: ${user["role"] ?? "user"}",
-                        style: const TextStyle(color: Colors.orange),
-                      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _fetchUsers(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Text("Error: ${snapshot.error}"),
+            );
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("No users found."));
+          } else {
+            final users = snapshot.data!;
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "User Management",
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: users.length,
+                      itemBuilder: (context, index) {
+                        final user = users[index];
+                        final addresses = user["addresses"] as List<Map<String, dynamic>>?;
+
+                        return Card(
+                          color: const Color(0xFF2D333A),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.person, color: Colors.white, size: 24),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      user["username"] ?? "No Name",
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                _buildUserInfoRow(Icons.email, user["email"] ?? "No Email"),
+                                const SizedBox(height: 10),
+                                _buildUserInfoRow(Icons.phone, user["phone"] ?? "No Phone"),
+                                const SizedBox(height: 10),
+                                if (addresses != null && addresses.isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        "Addresses:",
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      ...addresses.map((address) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(left: 10, bottom: 5),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                "Address: ${address["address"] ?? "No Address"}",
+                                                style: const TextStyle(fontSize: 14, color: Colors.white),
+                                              ),
+                                              Text(
+                                                "Timestamp: ${address["timestamp"] ?? "No Timestamp"}",
+                                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  "Role: ${user["role"] ?? "user"}",
+                                  style: const TextStyle(fontSize: 16, color: Colors.orange),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
+            );
+          }
+        },
       ),
+    );
+  }
+
+  Widget _buildUserInfoRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(width: 10),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 16, color: Colors.white),
+        ),
+      ],
     );
   }
 }

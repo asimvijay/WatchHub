@@ -20,6 +20,7 @@ dependencies:
   firebase_auth: ^5.5.1
   firebase_database: ^11.3.4
   shared_preferences: ^2.5.2
+  provider: ^6.1.2
 
 
 dev_dependencies:

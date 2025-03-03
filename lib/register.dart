@@ -100,7 +100,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  color: Colors.black,
+
                   padding: const EdgeInsets.all(10),
                   child: Image.asset('assets/images/logo1.webp', width: 250, fit: BoxFit.contain),
                 ),
@@ -172,7 +172,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   height: 50,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: Colors.teal,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: _isLoading ? null : _register,

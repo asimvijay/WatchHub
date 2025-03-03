@@ -10,6 +10,8 @@ import 'watch_data.dart'; // Import the watch data
 import 'package:watchhub/login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'purchase.dart'; // Import the new file
+import 'package:watchhub/admin_screen.dart';
+import 'package:watchhub/splashscreen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.platformOptions);
@@ -28,7 +30,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF1F2228),
         textTheme: GoogleFonts.latoTextTheme(Theme.of(context).textTheme),
       ),
-      home: const LandingPage(),
+      home: const SplashScreen(),
     );
   }
 }
@@ -44,6 +46,7 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   User? _user;
   String _username = 'Guest';
+  String _role ='user';
   String _sortBy = 'default'; // Sorting criteria
   final TextEditingController _searchController = TextEditingController(); // Search controller
   String _searchQuery = ''; // Search query
@@ -706,43 +709,63 @@ class _LandingPageState extends State<LandingPage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     if (user != null) {
-      // Check if username is already saved in local storage
+      // Fetch username and role from SharedPreferences
       String? savedUsername = prefs.getString('username');
-      if (savedUsername != null) {
+      String? savedRole = prefs.getString('role');
+
+      if (savedUsername != null && savedRole != null) {
+        // If username and role are already saved locally, use them
         setState(() {
           _user = user;
           _username = savedUsername;
+          _role = savedRole;
         });
       } else {
-        // Fetch username from Firebase if not saved locally
+        // Fetch user data from Firebase if not saved locally
         DatabaseReference userRef = FirebaseDatabase.instance.ref().child('users').child(user.uid);
         DataSnapshot snapshot = await userRef.get();
+
         if (snapshot.exists) {
+          // Fetch username and role from Firebase
           String username = snapshot.child('username').value.toString();
-          // Save username to local storage
+          String role = snapshot.child('role').value.toString();
+
+          // Save username and role to local storage
           await prefs.setString('username', username);
+          await prefs.setString('role', role);
+
           setState(() {
             _user = user;
             _username = username;
+            _role = role;
           });
         } else {
-          // If no username in Firebase, use email or 'Guest'
+          // If no user data in Firebase, use email or 'Guest' and default role
           String username = user.email ?? 'Guest';
+          String role = 'user'; // Default role
+
+          // Save username and role to local storage
           await prefs.setString('username', username);
+          await prefs.setString('role', role);
+
           setState(() {
             _user = user;
             _username = username;
+            _role = role;
           });
         }
       }
+
       // Fetch wishlist data after user is logged in
       await _fetchWishlist();
     } else {
-      // If no user is logged in, clear the saved username
+      // If no user is logged in, clear the saved username and role
       await prefs.remove('username');
+      await prefs.remove('role');
       setState(() {
         _user = null;
         _username = 'Guest';
+        _role = 'user'; // Reset role to default
         _wishlistItems = [];
       });
     }
@@ -909,6 +932,26 @@ class _LandingPageState extends State<LandingPage> {
               Navigator.pop(context);
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.home, color: Colors.white),
+            title: const Text("Home", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+            },
+          ),
+          // Add the Admin Page button conditionally
+          if (_role == 'admin')
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings, color: Colors.white),
+              title: const Text("Admin Page", style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context); // Close the drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdminScreen()),
+                );
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.location_on, color: Colors.white),
             title: const Text("Add Delivery Addresses", style: TextStyle(color: Colors.white)),

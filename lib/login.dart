@@ -5,6 +5,7 @@ import 'package:watchhub/admin_screen.dart'; // Admin screen for admins
 import 'package:watchhub/register.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -57,35 +58,45 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (userCredential.user != null) {
-        // Fetch the user's role
+        // Fetch the user's role from Firebase Realtime Database
         String? role = await _getUserRole(userCredential.user!.uid);
 
-        // Navigate based on the role
-        if (role == "admin") {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AdminScreen()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LandingPage()),
-          );
-        }
+        // Save the role in SharedPreferences
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('role', role ?? 'user'); // Default role is 'user' if not found
+
+        // Always navigate to the LandingPage, regardless of the role
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LandingPage()),
+        );
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage = "An error occurred";
+      String errorMessage = "This isn't a correct email";
       if (e.code == 'user-not-found') {
         errorMessage = "No user found with this email.";
       } else if (e.code == 'wrong-password') {
         errorMessage = "Incorrect password.";
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage, style: TextStyle(color: Colors.white)),
-          backgroundColor: Colors.red,
-        ),
+      // Show a popup with the error message
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text("Login Error", style: TextStyle(color: Colors.white)),
+            backgroundColor: const Color(0xFF1F2228),
+            content: Text(errorMessage, style: const TextStyle(color: Colors.white)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+                child: const Text("OK", style: TextStyle(color: Colors.orange)),
+              ),
+            ],
+          );
+        },
       );
     } finally {
       setState(() {
@@ -109,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    color: Colors.black,
+
                     padding: const EdgeInsets.all(10),
                     child: Image.asset(
                       'assets/images/logo1.webp',
@@ -141,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
                   TextField(
                     controller: _passwordController,
@@ -163,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Colors.teal,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
@@ -175,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
